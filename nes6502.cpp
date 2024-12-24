@@ -93,12 +93,40 @@ void nes6502::SetFlag(FLAGS6502 f, bool v) {
     }
 }
 
+// ADDRESSING MODES
+
+// implied
 uint8_t nes6502::IMP() {
     fetched = a;
     return 0;
 }
 
+// immediate
 uint8_t nes6502::IMM() {
     addr_abs = pc++;
+    return 0;
+}
+
+// zero page
+uint8_t nes6502::ZP0() {
+    addr_abs = read(pc);
+    pc++;
+    addr_abs &= 0x00FF;
+    return 0;
+}
+
+// zero page with x offset
+uint8_t nes6502::ZPX() {
+    addr_abs = (read(pc) + x);
+    pc++;
+    addr_abs &= 0x00FF;
+    return 0;
+}
+
+// zero page with y offset
+uint8_t nes6502::ZPY() {
+    addr_abs = (read(pc) + y);
+    pc++;
+    addr_abs &= 0x00FF;
     return 0;
 }

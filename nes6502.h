@@ -51,7 +51,7 @@ private:
     void write(uint16_t a, uint8_t d);
 
     uint8_t fetched = 0x00;
-    uint8_t fetch();
+    uint8_t fetch(); // fetches data from memory into fetched based on the current addr mode
 
     uint16_t addr_abs = 0x0000;
     uint16_t addr_rel = 0x00;
