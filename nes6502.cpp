@@ -79,10 +79,12 @@ void nes6502::clock() {
     cycles--;
 }
 
+// returns the value of the f flag in status (either 0 or 1)
 uint8_t nes6502::GetFlag(FLAGS6502 f) {
     return ((status & f) > 0) ? 1 : 0;
 }
 
+// if v, set flag f in status, otherwise clear flag f
 void nes6502::SetFlag(FLAGS6502 f, bool v) {
     if (v) {
         status |= f;
