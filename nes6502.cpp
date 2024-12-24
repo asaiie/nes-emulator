@@ -130,3 +130,60 @@ uint8_t nes6502::ZPY() {
     addr_abs &= 0x00FF;
     return 0;
 }
+
+// relative
+uint8_t nes6502::REL() {
+    addr_rel = read(pc);
+    pc++;
+    if (addr_rel & 0x80) { // if addr_rel negative (8 bit two's complement)
+        addr_rel |= 0xFF00; // convert to same number in 16 bit two's complement
+    }
+    return 0;
+}
+
+// absolute
+uint8_t nes6502::ABS() {
+    uint16_t lo = read(pc++);
+    uint16_t hi = read(pc++);
+    addr_abs = (hi << 8) | lo;
+    return 0;
+}
+
+// absolute with x offset
+uint8_t nes6502::ABX() {
+    uint16_t lo = read(pc++);
+    uint16_t hi = read(pc++);
+    addr_abs = (hi << 8) | lo;
+    addr_abs += x;
+    if ((addr_abs & 0xFF00) != (hi << 8)) {
+        return 1; // additional clock cycle needed since we crossed a page boundary
+    } else {
+        return 0;
+    }
+}
+
+// absolute with x offset
+uint8_t nes6502::ABY() {
+    uint16_t lo = read(pc++);
+    uint16_t hi = read(pc++);
+    addr_abs = (hi << 8) | lo;
+    addr_abs += y;
+    if ((addr_abs & 0xFF00) != (hi << 8)) {
+        return 1; // additional clock cycle needed since we crossed a page boundary
+    } else {
+        return 0;
+    }
+}
+
+// indirect 
+uint8_t nes6502::IND() {
+    uint16_t lo = read(pc++);
+    uint16_t hi = read(pc++);
+    uint16_t ptr = (hi << 8) | lo;
+    if (lo == 0x00FF) {
+        addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr + 0); 
+    } else {
+        addr_abs = (read(ptr + 1) << 8) | read(ptr + 0); 
+    }
+    return 0;
+}
