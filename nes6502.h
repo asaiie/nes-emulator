@@ -18,6 +18,8 @@ public:
     ~nes6502();
 
 public:
+    void ConnectBus(Bus *n) { bus = n; }
+
     // CPU core registers
     uint8_t a = 0x00;      // accumulator register
     uint8_t x = 0x00;      // x register
@@ -31,8 +33,6 @@ public:
     void nmi();   // non-maskable interrupt
     void clock(); // perform one clock tick's worth of update
 
-    void ConnectBus(Bus *n) { bus = n; }
-
     enum FLAGS6502 {
         C = (1 << 0), // carry
         Z = (1 << 1), // zero
@@ -43,6 +43,9 @@ public:
         V = (1 << 6), // overflow
         N = (1 << 7), // negative
     };
+
+    // converts hexcode into human readable strings for visualization
+    std::map<uint16_t, std::string> disassemble(uint16_t nStart, uint16_t nStop);
 
 private:
     // link to bus

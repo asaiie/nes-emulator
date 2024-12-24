@@ -93,7 +93,7 @@ void nes6502::SetFlag(FLAGS6502 f, bool v) {
     }
 }
 
-// ADDRESSING MODES
+/* ADDRESSING MODES */
 
 // implied
 uint8_t nes6502::IMP() {
@@ -186,4 +186,48 @@ uint8_t nes6502::IND() {
         addr_abs = (read(ptr + 1) << 8) | read(ptr + 0); 
     }
     return 0;
+}
+
+// indexed indirect (ind, x) 
+uint8_t nes6502::IZX() {
+    uint16_t ptr = read(pc++);
+    uint16_t lo = read((uint16_t)(ptr + (uint16_t)x) & 0x00FF);
+    uint16_t hi = read((uint16_t)(ptr + (uint16_t)x + 1) & 0x00FF);
+    addr_abs = (hi << 8) | lo;
+    return 0;
+}
+
+// indirect indexed (ind, y) 
+uint8_t nes6502::IZY() {
+    uint16_t ptr = read(pc++);
+    uint16_t lo = read(ptr & 0x00FF);
+    uint16_t hi = read((ptr + 1) & 0x00FF);
+    addr_abs = (hi << 8) | lo;
+    addr_abs += y;
+    if ((addr_abs & 0xFF00) != (hi << 8)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/* INSTRUCTIONS */
+
+uint8_t nes6502::fetch() {
+    // in implied mode, just fetch from accumulator
+    // otherwise, find the respective location in memory
+    if (!(lookup[opcode].addrmode == &nes6502::IMP)) {
+        fetched = read(addr_abs);
+    }
+    return fetched;
+}
+
+// bitwise AND: A = A & M
+// flags: N, Z
+uint8_t nes6502::AND() {
+    fetch();
+    a = a & fetched;
+    SetFlag(Z, a == 0x00);
+    SetFlag(N, a & 0x80);
+    return 1;
 }
