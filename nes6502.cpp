@@ -55,12 +55,86 @@ nes6502::nes6502() {
 
 nes6502::~nes6502() {}
 
+/*-------------------------------------------
+ *            BUS CONNECTIVITY
+ * ----------------------------------------*/
+
 uint8_t nes6502::read(uint16_t a) {
     return bus->read(a, false);
 }
 
 void nes6502::write(uint16_t a, uint8_t d) {
     bus->write(a, d);
+}
+
+/*-------------------------------------------
+ *            EXTERNAL INPUTS
+ * ----------------------------------------*/
+
+void nes6502::reset() {
+    // reset internal registers
+    a = 0;
+    x = 0;
+    y = 0;
+    stkp = 0xFD;
+    status = 0x00 | U;
+
+    // set pc
+    addr_abs = 0xFFFC;
+    uint16_t lo = read(addr_abs + 0);
+    uint16_t hi = read(addr_abs + 1);
+    pc = (hi << 8) | lo;
+
+    // clear internal pointers
+    addr_abs = 0x0000;
+    addr_rel = 0x0000;
+    fetched = 0x00;
+
+    cycles = 8;
+}
+
+void nes6502::irq() {
+    if (GetFlag(I) == 0) {
+        // write pc to stack
+        write(0x0100 + stkp, (pc >> 8) & 0x00FF); // hi bytes in 8-bit form
+        stkp--;
+        write(0x0100 + stkp, pc & 0x00FF); // lo bytes
+        stkp--;
+
+        // push status to stack
+        SetFlag(B, 0); SetFlag(U, 1); SetFlag(I, 1);
+        write(0x0100 + stkp, status);
+        stkp--;
+
+        // read new pc
+        addr_abs = 0xFFFE;
+        uint16_t lo = read(addr_abs + 0);
+        uint16_t hi = read(addr_abs + 1);
+        pc = (hi << 8) | lo;
+
+        cycles = 7;
+    }
+}
+
+void nes6502::nmi() {
+    // write pc to stack
+    write(0x0100 + stkp, (pc >> 8) & 0x00FF); // hi bytes in 8-bit form
+    stkp--;
+    write(0x0100 + stkp, pc & 0x00FF); // lo bytes
+    stkp--;
+
+    // push status to stack
+    SetFlag(B, 0); SetFlag(U, 1); SetFlag(I, 1);
+    write(0x0100 + stkp, status);
+    stkp--;
+
+    // read new pc
+    addr_abs = 0xFFFA;
+    uint16_t lo = read(addr_abs + 0);
+    uint16_t hi = read(addr_abs + 1);
+    pc = (hi << 8) | lo;
+
+    cycles = 8;
 }
 
 void nes6502::clock() {
@@ -79,6 +153,10 @@ void nes6502::clock() {
     cycles--;
 }
 
+/*-------------------------------------------
+ *             FLAG FUNCTIONS
+ * ----------------------------------------*/
+
 // returns the value of the f flag in status (either 0 or 1)
 uint8_t nes6502::GetFlag(FLAGS6502 f) {
     return ((status & f) > 0) ? 1 : 0;
@@ -93,7 +171,9 @@ void nes6502::SetFlag(FLAGS6502 f, bool v) {
     }
 }
 
-/* ADDRESSING MODES */
+/*-------------------------------------------
+ *            ADDRESSING MODES
+ * ----------------------------------------*/
 
 // implied
 uint8_t nes6502::IMP() {
@@ -211,7 +291,9 @@ uint8_t nes6502::IZY() {
     }
 }
 
-/* INSTRUCTIONS */
+/*-------------------------------------------
+ *             INSTRUCTIONS
+ * ----------------------------------------*/
 
 uint8_t nes6502::fetch() {
     // in implied mode, just fetch from accumulator
@@ -220,6 +302,35 @@ uint8_t nes6502::fetch() {
         fetched = read(addr_abs);
     }
     return fetched;
+}
+
+// Add with Carry: A = A + M + C
+// flags: C, V, N, Z
+uint8_t nes6502::ADC() {
+    fetch();
+    temp = (uint16_t) a + (uint16_t) fetched + (uint16_t) GetFlag(C);
+    SetFlag(C, temp > 255);
+    SetFlag(Z, (temp & 0x00FF) == 0);
+    // MSB of A and M are the same but different from R (temp)
+    // i.e. P + P = N as well as N + N = P cause overflows
+    SetFlag(V, (~((uint16_t) a ^ (uint16_t) fetched) & ((uint16_t) a ^ (uint16_t) temp)) & 0x0080);
+    SetFlag(N, temp & 0x0080);
+    a = temp & 0x00FF;
+    return 1;
+}
+
+// Subtract with Carry: A = A - M - (~C) = A - M - (1 - C) = A + (-M + 1) + C
+// flags: C, V, N, Z
+uint8_t nes6502::SBC() {
+    fetch();
+    uint16_t inv_m = ((uint16_t) fetched) ^ 0x00FF; // note that in two's complement, the inversion of M is the same as -M + 1
+    temp = (uint16_t) a + inv_m + (uint16_t) GetFlag(C);
+    SetFlag(C, temp & 0xFF00);
+    SetFlag(Z, ((temp & 0x00FF) == 0));
+    SetFlag(V, (temp ^ (uint16_t) a) & (temp ^ inv_m) & 0x0080); // set V if MSB of R is diff from A and (-M+1) --note: equiv. logic as in ADC()
+    SetFlag(N, temp & 0x0080);
+    a = temp & 0x00FF;
+    return 1;
 }
 
 // bitwise AND: A = A & M
@@ -339,7 +450,7 @@ uint8_t nes6502::BRK() {
     SetFlag(B, 0);
 
     // set pc to interrupt vector
-    pc = (uint16_t)read(0xFFFE) | ((uint16_t)read(0xFFFF) << 8);
+    pc = (uint16_t) read(0xFFFE) | ((uint16_t) read(0xFFFF) << 8);
 
     return 0;
 }
@@ -367,5 +478,60 @@ uint8_t nes6502::BVS() {
         }
         pc = addr_abs;
     }
+    return 0;
+}
+
+// Clear Carry Flag
+uint8_t nes6502::CLC() {
+    SetFlag(C, false);
+    return 0;
+}
+
+// Clear Decimal Flag
+uint8_t nes6502::CLD() {
+    SetFlag(D, false);
+    return 0;
+}
+
+// Clear Disable Interrupts Flag
+uint8_t nes6502::CLI() {
+    SetFlag(C, false);
+    return 0;
+}
+
+// Clear Overflow Flag
+uint8_t nes6502::CLV() {
+    SetFlag(V, false);
+    return 0;
+}
+
+// Push Accumulator on Stack
+uint8_t nes6502::PHA() {
+    write(0x0100 + stkp, a);
+    stkp--;
+    return 0;
+}
+
+// Pull Accumulator on Stack
+uint8_t nes6502::PLA() {
+    stkp++;
+    a = read(0x0100 + stkp);
+    SetFlag(Z, a == 0x00);
+    SetFlag(N, a == 0x80);
+    return 0;
+}
+
+// Return from Interrupt
+// restore pc, status (ignoring B & U)
+uint8_t nes6502::RTI() {
+    stkp++;
+    status = read(0x0100 + stkp);
+    status &= ~B;
+    status &= ~U;
+
+    stkp++;
+    pc = (uint16_t) read(0x0100 + stkp);
+    stkp++;
+    pc |= (uint16_t) read(0x0100 + stkp) << 8;
     return 0;
 }
