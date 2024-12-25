@@ -231,3 +231,141 @@ uint8_t nes6502::AND() {
     SetFlag(N, a & 0x80);
     return 1;
 }
+
+// Branch if Carry Clear: if (C == 0) then pc = address
+uint8_t nes6502::BCC() {
+    if (GetFlag(C) == 0) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++; // add cycle if we cross a page boundary
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Branch if Carry Set: if (C == 1) then pc = address
+uint8_t nes6502::BCS() {
+    if (GetFlag(C) == 1) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Branch if Equal: (if Z == 1) then pc = address
+uint8_t nes6502::BEQ() {
+    if (GetFlag(Z) == 1) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Test Bits in Memory with Accumulator
+uint8_t nes6502::BIT() {
+    fetch();
+    temp = a & fetched;
+    SetFlag(Z, (temp & 0x00FF) == 0x00);
+    SetFlag(N, fetched & (1 << 7));
+    SetFlag(V, fetched & (1 << 6));
+    return 0;
+}
+
+// Branch if Result Minus: (if N == 1) then pc = address
+uint8_t nes6502::BMI() {
+    if (GetFlag(N) == 1) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Branch if Not Equal: (if Z == 0) then pc = address
+uint8_t nes6502::BNE() {
+    if (GetFlag(Z) == 0) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Branch if Result Plus: (if N == 0) then pc = address
+uint8_t nes6502::BPL() {
+    if (GetFlag(N) == 0) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Break: software interrupt
+uint8_t nes6502::BRK() {
+    // add extra byte for spacing
+    pc++; // TODO: maybe increment by 2?
+
+    // write pc to stack
+    SetFlag(I, 1);
+    write(0x0100 + stkp, (pc >> 8) & 0x00FF); // hi bytes (in 8 bits)
+    stkp--;
+    write(0x0100 + stkp, pc & 0x00FF); // lo bytes
+    stkp--;
+
+    // push status to stack
+    SetFlag(B, 1);
+    write(0x0100 + stkp, status);
+    stkp--;
+    SetFlag(B, 0);
+
+    // set pc to interrupt vector
+    pc = (uint16_t)read(0xFFFE) | ((uint16_t)read(0xFFFF) << 8);
+
+    return 0;
+}
+
+// Branch if Overflow Clear: (if V == 0) then pc = address
+uint8_t nes6502::BVC() {
+    if (GetFlag(V) == 0) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// Branch if Overflow Set: (if V == 1) then pc = address
+uint8_t nes6502::BVS() {
+    if (GetFlag(V) == 1) {
+        cycles++;
+        addr_abs = pc + addr_rel;
+        if ((addr_abs & 0xFF00) != (pc & 0xFF00)) {
+            cycles++;
+        }
+        pc = addr_abs;
+    }
+    return 0;
+}

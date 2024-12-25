@@ -61,6 +61,8 @@ private:
     uint8_t opcode = 0x00;
     uint8_t cycles = 0;
 
+    uint16_t temp = 0x0000; // helper variable used by instructions
+
     uint8_t GetFlag(FLAGS6502 f);
     void SetFlag(FLAGS6502 f, bool v);
 
