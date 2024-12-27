@@ -335,21 +335,6 @@ uint8_t nes6502::ADC()
         return 1;
 }
 
-// Subtract with Carry: A = A - M - (~C) = A - M - (1 - C) = A + (-M + 1) + C
-// flags: C, V, N, Z
-uint8_t nes6502::SBC() 
-{
-        fetch();
-        uint16_t inv_m = ((uint16_t) fetched) ^ 0x00FF; // note that in two's complement, the inversion of M is the same as -M + 1
-        temp = (uint16_t) a + inv_m + (uint16_t) GetFlag(C);
-        SetFlag(C, temp & 0xFF00);
-        SetFlag(Z, ((temp & 0x00FF) == 0));
-        SetFlag(V, (temp ^ (uint16_t) a) & (temp ^ inv_m) & 0x0080); // set V if MSB of R is diff from A and (-M+1) --note: equiv. logic as in ADC()
-        SetFlag(N, temp & 0x0080);
-        a = temp & 0x00FF;
-        return 1;
-}
-
 // bitwise AND: A = A & M
 // flags: N, Z
 uint8_t nes6502::AND() 
@@ -777,6 +762,36 @@ uint8_t nes6502::PLP()
         return 0;
 }
 
+// Rotate Left
+uint8_t nes6502::ROL()
+{
+        fetch();
+        temp = (uint16_t) (fetched << 1) | GetFlag(C);
+        SetFlag(C, temp & 0xFF00);
+        SetFlag(Z, (temp & 0x00FF) == 0x0000);
+        SetFlag(N, temp & 0x0080);
+        if (lookup[opcode].addrmode == &nes6502::IMP)
+                a = temp & 0x00FF;
+        else
+                write(addr_abs, temp & 0x00FF);
+        return 0;
+}
+
+// Rotate Right
+uint8_t nes6502::ROR()
+{
+        fetch();
+        temp = (uint16_t) (GetFlag(C) << 7) | (fetched >> 1);
+        SetFlag(C, fetched & 0x01);
+        SetFlag(Z, (temp & 0x00FF) == 0x0000);
+        SetFlag(N, temp & 0x0080);
+        if (lookup[opcode].addrmode == &nes6502::IMP)
+                a = temp & 0x00FF;
+        else
+                write(addr_abs, temp & 0x00FF);
+        return 0;
+}
+
 // Return from Interrupt
 // restore pc, status (ignoring B & U)
 uint8_t nes6502::RTI() 
@@ -790,5 +805,132 @@ uint8_t nes6502::RTI()
         pc = (uint16_t) read(0x0100 + stkp);
         stkp++;
         pc |= (uint16_t) read(0x0100 + stkp) << 8;
+        return 0;
+}
+
+// Return from Subroutine
+uint8_t nes6502::RTS()
+{
+        stkp++;
+        pc = (uint16_t) read(0x0100 + stkp);
+        stkp++;
+        pc |= (uint16_t) read(0x0100 + stkp) << 8;
+        pc++;
+        return 0;
+}
+
+// Subtract with Carry: A = A - M - (~C) = A - M - (1 - C) = A + (-M + 1) + C
+// flags: C, V, N, Z
+uint8_t nes6502::SBC() 
+{
+        fetch();
+        uint16_t inv_m = ((uint16_t) fetched) ^ 0x00FF; // note that in two's complement, the inversion of M is the same as -M + 1
+        temp = (uint16_t) a + inv_m + (uint16_t) GetFlag(C);
+        SetFlag(C, temp & 0xFF00);
+        SetFlag(Z, ((temp & 0x00FF) == 0));
+        SetFlag(V, (temp ^ (uint16_t) a) & (temp ^ inv_m) & 0x0080); // set V if MSB of R is diff from A and (-M+1) --note: equiv. logic as in ADC()
+        SetFlag(N, temp & 0x0080);
+        a = temp & 0x00FF;
+        return 1;
+}
+
+// Set Carry Flag
+uint8_t nes6502::SEC()
+{
+        SetFlag(C, true);
+        return 0;
+}
+
+// Set Decimal Flag
+uint8_t nes6502::SED()
+{
+        SetFlag(D, true);
+        return 0;
+}
+
+// Set Interrupt Flag
+uint8_t nes6502::SEI()
+{
+        SetFlag(I, true);
+        return 0;
+}
+
+// Store Accumulator
+uint8_t nes6502::STA()
+{
+        write(addr_abs, a);
+        return 0;
+}
+
+// Store X Register
+uint8_t nes6502::STX()
+{
+        write(addr_abs, x);
+        return 0;
+}
+
+// Store Y Register
+uint8_t nes6502::STY()
+{
+        write(addr_abs, y);
+        return 0;
+}
+
+// Transfer Accumulator to X
+uint8_t nes6502::TAX()
+{
+        x = a;
+        SetFlag(Z, x == 0x00);
+        SetFlag(N, x & 0x80);
+        return 0;
+}
+
+// Transfer Accumulator to Y
+uint8_t nes6502::TAY()
+{
+        y = a;
+        SetFlag(Z, y == 0x00);
+        SetFlag(N, y & 0x80);
+        return 0;
+}
+
+// Transfer Stack Pointer to X
+uint8_t nes6502::TSX()
+{
+        x = stkp;
+        SetFlag(Z, x == 0x00);
+        SetFlag(N, x & 0x80);
+        return 0;
+}
+
+// Transfer X to Accumulator
+uint8_t nes6502::TXA()
+{
+        a = x;
+        SetFlag(Z, a == 0x00);
+        SetFlag(N, a & 0x80);
+        return 0;
+}
+
+// Transfer X to Stack Pointer
+uint8_t nes6502::TXS()
+{
+        stkp = x;
+        return 0;
+}
+
+
+// Transfer Y to Accumulator
+uint8_t nes6502::TYA()
+{
+        a = y;
+        SetFlag(Z, a == 0x00);
+        SetFlag(N, a == 0x80);
+        return 0;
+}
+
+// Illegal Opcodes
+uint8_t nes6502::XXX()
+{
         return 0;
 }
